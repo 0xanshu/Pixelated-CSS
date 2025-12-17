@@ -68,7 +68,7 @@ export default function HomePage() {
   return (
     <main className="flex h-full w-full flex-col justify-center">
       <div className="mx-5 mt-[1.5vh] flex h-[6vh] w-[calc(100%-10)] items-center justify-between border-1 border-gray-700 px-5">
-        <div className="text-2xl font-light">Motion-err</div>
+        <div className="text-2xl font-light">Pixelated-CSS</div>
         <div className="flex items-center justify-center">
           {questionPatterns.map((pattern) => (
             <button
