@@ -92,7 +92,6 @@ async function captureElementScreenshot(
     throw new Error(`Element with ID ${elementId} not found`);
   }
 
-  // Wait for the element to be fully rendered
   await page.waitForSelector(`#${elementId}`, { timeout: 5000 });
 
   const screenshot = await element.screenshot({
@@ -100,7 +99,6 @@ async function captureElementScreenshot(
     omitBackground: false,
     captureBeyondViewport: false,
   });
-
   return screenshot as Buffer;
 }
 

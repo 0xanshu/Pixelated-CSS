@@ -39,7 +39,7 @@ export default function HomePage() {
         body: JSON.stringify({ htmlA: patternHtml, htmlB: userHtml }),
       });
       if (!res.ok) {
-        alert("Matching failed on server. Try again.");
+        alert("Matching failed. Try again.");
         return;
       }
       const data = (await res.json()) as {
@@ -55,15 +55,11 @@ export default function HomePage() {
         alert("Success! The designs visually match.");
       } else {
         setMatchResult("failure");
-        alert(
-          `Try again. ${data.pixelDifferences} pixels different out of ${data.totalPixels} total (${data.matchPercentage.toFixed(1)}% match)`,
-        );
+        alert(`Try again. Not a match.`);
       }
     } catch (e) {
       console.error("Match error:", e);
-      alert(
-        `Error during matching: ${e instanceof Error ? e.message : "Unknown error"}`,
-      );
+      alert("Error during matching");
     } finally {
       setLoading(false);
     }
