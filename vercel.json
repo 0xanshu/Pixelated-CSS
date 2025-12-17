@@ -1,7 +1,7 @@
 {
   "functions": {
     "src/app/api/visual-match/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 120,
       "memory": 3008
     }
   }
