@@ -26,7 +26,8 @@
     "next": "^16.0.10",
     "pixelmatch": "^7.1.0",
     "pngjs": "^6.0.0",
-    "puppeteer": "^24.17.0",
+    "puppeteer-core": "^24.17.0",
+    "@sparticuz/chromium": "^131.0.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },

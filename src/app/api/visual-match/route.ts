@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import puppeteer from "puppeteer-core";
+import type { Browser, Page } from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { promises as fs } from "fs";
@@ -28,14 +30,14 @@ function createTestPage(htmlA: string, htmlB: string): string {
   <title>PNG Visual Match Test</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    * { 
-      box-sizing: border-box; 
-      margin: 0; 
-      padding: 0; 
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    body { 
-      margin: 0; 
-      padding: 0; 
+    body {
+      margin: 0;
+      padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #ffffff;
     }
@@ -71,7 +73,7 @@ function createTestPage(htmlA: string, htmlB: string): string {
     <div class="test-div" id="divA">${htmlA}</div>
     <div class="test-div" id="divB">${htmlB}</div>
   </div>
-  
+
   <script>
     window.addEventListener('load', () => {
       setTimeout(() => {
@@ -148,7 +150,10 @@ async function saveDebugImages(
   imageB: Buffer,
   timestamp: string,
 ): Promise<void> {
-  const debugDir = path.join(process.cwd(), "debug-screenshots");
+  // Use /tmp directory for Vercel serverless environment
+  const debugDir = process.env.VERCEL
+    ? path.join("/tmp", "debug-screenshots")
+    : path.join(process.cwd(), "debug-screenshots");
 
   try {
     await fs.mkdir(debugDir, { recursive: true });
@@ -194,19 +199,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    browser = await puppeteer.launch({
+    // Use @sparticuz/chromium for Vercel, local Chrome for development
+    const isProduction = !!(
+      process.env.VERCEL ?? process.env.NODE_ENV === "production"
+    );
+
+    console.log("Environment:", {
+      isProduction,
+      platform: process.platform,
+      vercel: !!process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const chromiumArgs = chromium.args as string[];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const chromiumPath = (await chromium.executablePath()) as string;
+
+    const launchOptions = {
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-web-security",
-        "--disable-features=VizDisplayCompositor",
-      ],
-      executablePath:
-        process.platform === "darwin"
+      args: isProduction
+        ? chromiumArgs
+        : [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-web-security",
+            "--disable-features=VizDisplayCompositor",
+          ],
+      executablePath: isProduction
+        ? chromiumPath
+        : process.platform === "darwin"
           ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
           : undefined,
+    };
+
+    console.log("Launching browser with options:", {
+      headless: launchOptions.headless,
+      argsCount: launchOptions.args.length,
+      executablePath: launchOptions.executablePath,
     });
+
+    browser = await puppeteer.launch(launchOptions);
 
     const page: Page = await browser.newPage();
     await page.setViewport({
@@ -271,10 +304,22 @@ export async function POST(req: NextRequest) {
     }
     console.error("PNG Visual match error:", error);
 
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error("Error details:", {
+      message: errorMessage,
+      stack: errorStack,
+      platform: process.platform,
+      isVercel: !!process.env.VERCEL,
+    });
+
     return NextResponse.json(
       {
         error: "PNG visual match failed",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
+        environment: process.env.VERCEL ? "vercel" : "local",
       },
       { status: 500 },
     );
