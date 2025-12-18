@@ -94,12 +94,13 @@ async function captureElementScreenshot(
   page: Page,
   elementId: string,
 ): Promise<Buffer> {
+  // Wait for element with reduced timeout
+  await page.waitForSelector(`#${elementId}`, { timeout: 5000 });
+
   const element = await page.$(`#${elementId}`);
   if (!element) {
     throw new Error(`Element with ID ${elementId} not found`);
   }
-
-  await page.waitForSelector(`#${elementId}`, { timeout: 5000 });
 
   const screenshot = await element.screenshot({
     type: "png",
@@ -220,17 +221,20 @@ export async function POST(req: NextRequest) {
 
     if (isProduction) {
       // Vercel/Production configuration
-      // Set chromium path for Vercel
-      await chromium.font(
-        "https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf",
-      );
-
+      // Set chromium executable path (no parameter needed)
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       const chromiumArgs = chromium.args as string[];
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      const chromiumPath = (await chromium.executablePath(
-        "/tmp/chromium",
-      )) as string;
+      const chromiumPath = (await chromium.executablePath()) as string;
+
+      // Set font (optional, wrap in try-catch to avoid failures)
+      try {
+        await chromium.font(
+          "https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf",
+        );
+      } catch (fontError) {
+        console.warn("Failed to load font, continuing without it:", fontError);
+      }
 
       launchOptions = {
         headless: true,
@@ -240,24 +244,6 @@ export async function POST(req: NextRequest) {
           "--single-process",
           "--no-zygote",
           "--disable-dev-shm-usage",
-          "--disable-software-rasterizer",
-          "--disable-extensions",
-          "--disable-background-networking",
-          "--disable-background-timer-throttling",
-          "--disable-backgrounding-occluded-windows",
-          "--disable-breakpad",
-          "--disable-component-extensions-with-background-pages",
-          "--disable-features=TranslateUI",
-          "--disable-ipc-flooding-protection",
-          "--disable-renderer-backgrounding",
-          "--disable-sync",
-          "--metrics-recording-only",
-          "--mute-audio",
-          "--no-first-run",
-          "--safebrowsing-disable-auto-update",
-          "--enable-automation",
-          "--password-store=basic",
-          "--use-mock-keychain",
         ],
         executablePath: chromiumPath,
       };
@@ -280,29 +266,56 @@ export async function POST(req: NextRequest) {
 
     console.log("Launching browser with options:", {
       headless: launchOptions.headless,
-      argsCount: launchOptions.args.length,
-      executablePath: launchOptions.executablePath,
+      argsCount: launchOptions.args?.length || 0,
+      executablePath: launchOptions.executablePath ? "set" : "not set",
+      isProduction,
     });
 
     browser = await puppeteer.launch(launchOptions);
+    console.log("Browser launched successfully");
 
     const page: Page = await browser.newPage();
+    console.log("New page created");
+
     await page.setViewport({
       width: 500,
       height: 800,
       deviceScaleFactor: 1,
     });
+    console.log("Viewport set");
 
+    // Use domcontentloaded instead of networkidle0 to avoid CDN timeout
     await page.setContent(createTestPage(htmlA, htmlB), {
-      waitUntil: "networkidle0",
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
     });
 
-    await page.waitForFunction(
-      () => (window as { pageReady?: boolean }).pageReady === true,
-      { timeout: 10000 },
-    );
+    // Wait for Tailwind CDN to load (with timeout)
+    try {
+      await page.waitForFunction(
+        () =>
+          typeof (window as { tailwind?: unknown }).tailwind !== "undefined",
+        { timeout: 10000 },
+      );
+    } catch (error) {
+      console.warn(
+        "Tailwind CDN may not have loaded, continuing anyway:",
+        error,
+      );
+    }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Wait for page ready signal (reduced timeout)
+    try {
+      await page.waitForFunction(
+        () => (window as { pageReady?: boolean }).pageReady === true,
+        { timeout: 5000 },
+      );
+    } catch (error) {
+      console.warn("Page ready signal timeout, continuing anyway:", error);
+    }
+
+    // Reduced wait time
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const divA = await page.$("#divA");
     const divB = await page.$("#divB");
@@ -316,13 +329,17 @@ export async function POST(req: NextRequest) {
       console.log("divB dimensions:", boxB);
     }
 
+    console.log("Capturing screenshots...");
     const [screenshotA, screenshotB] = await Promise.all([
       captureElementScreenshot(page, "divA"),
       captureElementScreenshot(page, "divB"),
     ]);
+    console.log("Screenshots captured successfully");
 
+    await page.close();
     await browser.close();
     browser = null;
+    console.log("Browser closed");
 
     const comparison = await comparePixels(screenshotA, screenshotB, 0.1);
 
