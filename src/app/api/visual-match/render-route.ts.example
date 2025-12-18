@@ -1,0 +1,43 @@
+/**
+ * Example: Render-optimized version of the API route
+ * This uses regular Puppeteer instead of puppeteer-core + @sparticuz/chromium
+ * 
+ * To use this:
+ * 1. Install: pnpm add puppeteer
+ * 2. Rename this file to route.ts (backup the original first)
+ * 3. Update the launch options below
+ */
+
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import puppeteer from "puppeteer"; // Regular puppeteer, not puppeteer-core
+import type { Browser, Page } from "puppeteer";
+// ... rest of your imports
+
+export async function POST(req: NextRequest) {
+  let browser: Browser | null = null;
+
+  try {
+    // ... validation code ...
+
+    // Render configuration - much simpler!
+    const launchOptions = {
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        // Render's environment is more permissive, fewer args needed
+      ],
+      // Puppeteer will find Chromium automatically on Render
+    };
+
+    browser = await puppeteer.launch(launchOptions);
+    
+    // ... rest of your code stays the same ...
+  } catch (error) {
+    // ... error handling ...
+  }
+}
+
