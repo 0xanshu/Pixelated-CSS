@@ -8,6 +8,11 @@ import { PNG } from "pngjs";
 import { promises as fs } from "fs";
 import path from "path";
 
+// Ensure we use Node.js runtime on Vercel (not Edge)
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 interface PixelComparisonResult {
   matched: boolean;
   pixelDifferences: number;
@@ -211,27 +216,49 @@ export async function POST(req: NextRequest) {
       nodeEnv: process.env.NODE_ENV,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const chromiumArgs = chromium.args as string[];
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const chromiumPath = (await chromium.executablePath()) as string;
+    let launchOptions;
 
-    const launchOptions = {
-      headless: true,
-      args: isProduction
-        ? chromiumArgs
-        : [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-web-security",
-            "--disable-features=VizDisplayCompositor",
-          ],
-      executablePath: isProduction
-        ? chromiumPath
-        : process.platform === "darwin"
-          ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-          : undefined,
-    };
+    if (isProduction) {
+      // Vercel/Production configuration
+      // Set chromium path for Vercel
+      await chromium.font(
+        "https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf",
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const chromiumArgs = chromium.args as string[];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const chromiumPath = (await chromium.executablePath(
+        "/tmp/chromium",
+      )) as string;
+
+      launchOptions = {
+        headless: true,
+        args: [
+          ...chromiumArgs,
+          "--disable-gpu",
+          "--single-process",
+          "--no-zygote",
+          "--disable-dev-shm-usage",
+        ],
+        executablePath: chromiumPath,
+      };
+    } else {
+      // Local development configuration
+      launchOptions = {
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-web-security",
+          "--disable-features=VizDisplayCompositor",
+        ],
+        executablePath:
+          process.platform === "darwin"
+            ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            : undefined,
+      };
+    }
 
     console.log("Launching browser with options:", {
       headless: launchOptions.headless,
