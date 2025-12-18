@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build --webpack",
+    "build": "node scripts/generate-tailwind-standalone.mjs && next build --webpack",
+    "build:tailwind": "node scripts/generate-tailwind-standalone.mjs",
     "check": "next lint && tsc --noEmit",
     "dev": "next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",

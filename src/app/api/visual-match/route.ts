@@ -7,6 +7,7 @@ import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { promises as fs } from "fs";
 import path from "path";
+import { getTailwindCSS } from "../../../utils/getTailwindCSS";
 
 // Ensure we use Node.js runtime on Vercel (not Edge)
 export const runtime = "nodejs";
@@ -27,14 +28,15 @@ interface MatchRequestBody {
 }
 
 function createTestPage(htmlA: string, htmlB: string): string {
+  const tailwindCSS = getTailwindCSS();
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNG Visual Match Test</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
+${tailwindCSS}
     * {
       box-sizing: border-box;
       margin: 0;
@@ -284,25 +286,11 @@ export async function POST(req: NextRequest) {
     });
     console.log("Viewport set");
 
-    // Use domcontentloaded instead of networkidle0 to avoid CDN timeout
+    // Use domcontentloaded - no CDN needed since Tailwind is inlined
     await page.setContent(createTestPage(htmlA, htmlB), {
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
-
-    // Wait for Tailwind CDN to load (with timeout)
-    try {
-      await page.waitForFunction(
-        () =>
-          typeof (window as { tailwind?: unknown }).tailwind !== "undefined",
-        { timeout: 10000 },
-      );
-    } catch (error) {
-      console.warn(
-        "Tailwind CDN may not have loaded, continuing anyway:",
-        error,
-      );
-    }
 
     // Wait for page ready signal (reduced timeout)
     try {
